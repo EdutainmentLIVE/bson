@@ -6,6 +6,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ForeignFunctionInterface #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE TypeSynonymInstances #-}
@@ -29,6 +30,7 @@ import Prelude hiding (lookup)
 #if !MIN_VERSION_base(4,8,0)
 import Control.Applicative ((<$>))
 #endif
+import Control.DeepSeq (NFData)
 import Control.Monad (foldM)
 import Data.Bits (shift, (.|.))
 import Data.Int (Int32, Int64)
@@ -39,6 +41,7 @@ import Data.Time.Clock (UTCTime)
 import Data.Time.Clock.POSIX (POSIXTime, posixSecondsToUTCTime,
                               utcTimeToPOSIXSeconds, getPOSIXTime)
 import Data.Time.Format ()  -- for Show and Read instances of UTCTime
+import GHC.Generics (Generic)
 import Data.Typeable hiding (cast)
 import Data.Word (Word8, Word16, Word32, Word64)
 import Numeric (readHex, showHex)
@@ -128,8 +131,12 @@ merge es docInitial = foldl f docInitial es
 
 infix 0 :=, =:, =?
 
-data Field = (:=) {label :: !Label, value :: Value}  deriving (Typeable, Eq, Ord)
+data Field = (:=) {label :: !Label, value :: Value}  deriving (Typeable, Eq, Ord, Generic)
 -- ^ A BSON field is a named value, where the name (label) is a string and the value is a BSON 'Value'
+
+-- instance NFData a => NFData (Field a)
+instance NFData Field
+
 
 (=:) :: (Val v) => Label -> v -> Field
 -- ^ Field with given label and typed value
@@ -168,7 +175,9 @@ data Value = Float Double
            | Int64 Int64
            | Stamp MongoStamp
            | MinMax MinMaxKey
-           deriving (Typeable, Eq, Ord)
+           deriving (Typeable, Eq, Ord, Generic)
+
+instance NFData Value
 
 instance Show Value where
   showsPrec d = fval (showsPrec d)
@@ -290,20 +299,28 @@ instance Val Function where
   cast' (Fun x) = Just x
   cast' _       = Nothing
 
+instance NFData Function
+
 instance Val UUID where
   val            = Uuid
   cast' (Uuid x) = Just x
   cast' _         = Nothing
+
+instance NFData UUID
 
 instance Val MD5 where
   val           = Md5
   cast' (Md5 x) = Just x
   cast' _       = Nothing
 
+instance NFData MD5
+
 instance Val UserDefined where
   val               = UserDef
   cast' (UserDef x) = Just x
   cast' _           = Nothing
+
+instance NFData UserDefined
 
 instance Val ObjectId where
   val             = ObjId
@@ -334,16 +351,22 @@ instance Val Regex where
   cast' (RegEx x) = Just x
   cast' _         = Nothing
 
+instance NFData Regex
+
 instance Val Javascript where
   val               = JavaScr
   cast' (JavaScr x) = Just x
   cast' _           = Nothing
+
+instance NFData Javascript
 
 instance Val Symbol where
   val              = Sym
   cast' (Sym x)    = Just x
   cast' (String x) = Just (Symbol x)
   cast' _          = Nothing
+
+instance NFData Symbol
 
 instance Val Int32 where
   val             = Int32
@@ -379,10 +402,16 @@ instance Val MongoStamp where
   cast' (Stamp x) = Just x
   cast' _         = Nothing
 
+
+instance NFData MongoStamp
+
 instance Val MinMaxKey where
   val              = MinMax
   cast' (MinMax x) = Just x
   cast' _          = Nothing
+
+
+instance NFData MinMaxKey
 
 fitInt :: (Integral n, Integral m, Bounded m) => n -> Maybe m
 -- ^ If number fits in type m then cast to m, otherwise Nothing
@@ -396,45 +425,49 @@ fitInt n =
 
 -- ** Binary types
 
-newtype Binary = Binary S.ByteString  deriving (Typeable, Show, Read, Eq, Ord)
+newtype Binary = Binary S.ByteString  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
-newtype Function = Function S.ByteString  deriving (Typeable, Show, Read, Eq, Ord)
+instance NFData Binary
 
-newtype UUID = UUID S.ByteString  deriving (Typeable, Show, Read, Eq, Ord)
+newtype Function = Function S.ByteString  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
-newtype MD5 = MD5 S.ByteString  deriving (Typeable, Show, Read, Eq, Ord)
+newtype UUID = UUID S.ByteString  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
-newtype UserDefined = UserDefined S.ByteString  deriving (Typeable, Show, Read, Eq, Ord)
+newtype MD5 = MD5 S.ByteString  deriving (Typeable, Show, Read, Eq, Ord, Generic)
+
+newtype UserDefined = UserDefined S.ByteString  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
 -- ** Regex
 
-data Regex = Regex Text Text  deriving (Typeable, Show, Read, Eq, Ord)
+data Regex = Regex Text Text  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 -- ^ The first string is the regex pattern, the second is the regex options string. Options are identified by characters, which must be listed in alphabetical order. Valid options are *i* for case insensitive matching, *m* for multiline matching, *x* for verbose mode, *l* to make \\w, \\W, etc. locale dependent, *s* for dotall mode (\".\" matches everything), and *u* to make \\w, \\W, etc. match unicode.
 
 -- ** Javascript
 
-data Javascript = Javascript Document Text deriving (Typeable, Show, Eq, Ord)
+data Javascript = Javascript Document Text deriving (Typeable, Show, Eq, Ord, Generic)
 -- ^ Javascript code with possibly empty environment mapping variables to values that the code may reference
 
 -- ** Symbol
 
-newtype Symbol = Symbol Text  deriving (Typeable, Show, Read, Eq, Ord)
+newtype Symbol = Symbol Text  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
 -- ** MongoStamp
 
-newtype MongoStamp = MongoStamp Int64  deriving (Typeable, Show, Read, Eq, Ord)
+newtype MongoStamp = MongoStamp Int64  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
 -- ** MinMax
 
-data MinMaxKey = MinKey | MaxKey  deriving (Typeable, Show, Read, Eq, Ord)
+data MinMaxKey = MinKey | MaxKey  deriving (Typeable, Show, Read, Eq, Ord, Generic)
 
 -- ** ObjectId
 
-data ObjectId = Oid {-# UNPACK #-} !Word32 {-# UNPACK #-} !Word64  deriving (Typeable, Eq, Ord)
+data ObjectId = Oid {-# UNPACK #-} !Word32 {-# UNPACK #-} !Word64  deriving (Typeable, Eq, Ord, Generic)
 -- ^ A BSON ObjectID is a 12-byte value consisting of a 4-byte timestamp (seconds since epoch), a 3-byte machine id, a 2-byte process id, and a 3-byte counter. Note that the timestamp and counter fields must be stored big endian unlike the rest of BSON. This is because they are compared byte-by-byte and we want to ensure a mostly increasing order.
 
 instance Show ObjectId where
   showsPrec _ (Oid x y) = showHexLen 8 x . showHexLen 16 y
+
+instance NFData ObjectId
 
 instance Read ObjectId where
   readPrec = do
